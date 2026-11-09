@@ -74,21 +74,24 @@ db2 = dz2.sum(dim=0)
 
 print("dw1 max: ", dw1.abs().max().item())
 
-learning_rate = 0.001
+learning_rate = 0.01
 
 new_w1 = w1.clone()
 new_b1 = b1.clone()
 new_w2 = w2.clone()
 new_b2 = b2.clone()
 
-new_w1 = w1 - learning_rate * dw1
-new_b1 = b1 - learning_rate * db1
-new_w2 = w2 - learning_rate * dw2
-new_b2 = b2 - learning_rate * db2
 
+mean = x_train.mean(dim=0)
+std = x_train.std(dim=0)
+epsilon = 1e-8
 
-for epoch in range(50):
-    z1 = torch.matmul(x_train, new_w1) + new_b1
+feature_scale = (x_train - mean) / (std + epsilon)
+
+x_test_scaled = (x_test - mean) / (std + epsilon)
+
+for epoch in range(200):
+    z1 = torch.matmul(feature_scale, new_w1) + new_b1
     a1 = torch.relu(z1)
     z2 = torch.matmul(a1, new_w2) + new_b2
 
@@ -100,7 +103,7 @@ for epoch in range(50):
     da1 = torch.matmul(dz2, new_w2.T)
     relu = torch.where(z1 > 0,1,0)
     dz1 = da1 * relu
-    dw1 = torch.matmul(x_train.T, dz1)
+    dw1 = torch.matmul(feature_scale.T, dz1)
     db1 = dz1.sum(dim=0)
     dw2 = torch.matmul(a1.T, dz2)
     db2 = dz2.sum(dim=0)
@@ -114,12 +117,6 @@ for epoch in range(50):
         print(f"Epoch {epoch}, Loss: {loss.item():.4f}")
 
 
-mean = x_train.mean(dim=0)
-std = x_train.std(dim=0)
-epsilon = 1e-8
-feature_scale = (x_train - mean) / (std + epsilon)
-
-x_test_scaled = (x_test - mean) / (std + epsilon)
 
 z1_test = torch.matmul(x_test_scaled, new_w1) + new_b1
 a1_test = torch.relu(z1_test)
