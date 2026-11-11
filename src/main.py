@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import matplotlib.pyplot as plt
 from sklearn.datasets import load_breast_cancer
 from sklearn.model_selection import train_test_split
 
@@ -20,12 +21,17 @@ def load_breast_cancer_():
 
 x, y = load_breast_cancer_()
 
+
+
 x_train, x_test, y_train, y_test = train_test_split( x, y, test_size=0.2, random_state=42 )
 
 x_train = torch.tensor(x_train, dtype=torch.float32)
 x_test = torch.tensor(x_test, dtype=torch.float32)
 y_train = torch.tensor(y_train, dtype=torch.long)
 y_test = torch.tensor(y_test, dtype=torch.long)
+
+train_test_split (x_train,y_train,test_size=0.25,random_state=42)
+x_train, x_val, y_train, y_val = train_test_split(x_train,y_train,test_size=0.25,random_state=42)
 
 print ("y_train:", y_train.float().mean().item())
 
@@ -35,9 +41,8 @@ print(-torch.log(torch.tensor(0.5)))
 
 print ("Max absolute value in x_train: ", x_train.abs().max().item())
 
-w1 = torch.randn(30,16, requires_grad=True) 
-b1 = torch.zeros(16, requires_grad=True)   
-
+w1 = torch.randn(30,16, ) 
+b1 = torch.zeros(16, )   
 z1 = torch.matmul(x_train, w1) + b1
 a1 = torch.relu(z1)
 b2 = torch.zeros(2)
@@ -63,7 +68,7 @@ loss = loss_fn(z2, y_train)
 print(f"Loss: {loss.item():.4f}")
 
 
-dz2 = ( torch.softmax(z2, dim=1) - torch.nn.functional.one_hot(y_train, num_classes=2) ) / y_train.shape[0]
+dz2 = (torch.softmax(z2, dim=1) - torch.nn.functional.one_hot(y_train, num_classes=2) ) / y_train.shape[0]
 da1 = torch.matmul(dz2, w2.T)
 relu = torch.where(z1 > 0,1,0)
 dz1 = da1 * relu
@@ -87,7 +92,7 @@ std = x_train.std(dim=0)
 epsilon = 1e-8
 
 feature_scale = (x_train - mean) / (std + epsilon)
-
+losses = []
 x_test_scaled = (x_test - mean) / (std + epsilon)
 
 for epoch in range(200):
@@ -98,6 +103,7 @@ for epoch in range(200):
 
 
     loss = loss_fn(z2, y_train) 
+    losses.append(loss.item())
 
     dz2 = (torch.softmax(z2, dim=1) - torch.nn.functional.one_hot(y_train, num_classes=2) ) / y_train.shape[0]
     da1 = torch.matmul(dz2, new_w2.T)
@@ -113,7 +119,8 @@ for epoch in range(200):
     new_w2 = new_w2 - learning_rate * dw2
     new_b2 = new_b2 - learning_rate * db2
 
-    if epoch < 10 or epoch % 10 == 0:
+    
+    if epoch < 10 or epoch % 20 == 0:
         print(f"Epoch {epoch}, Loss: {loss.item():.4f}")
 
 
@@ -122,10 +129,20 @@ z1_test = torch.matmul(x_test_scaled, new_w1) + new_b1
 a1_test = torch.relu(z1_test)
 z2_test = torch.matmul(a1_test, new_w2) + new_b2
 
+min_loss = min(losses)
+best_epoch = losses.index(min_loss)
+
+if epoch == best_epoch:
+        print(f"Best epoch: {best_epoch}, Loss: {loss.item():.4f}")
+
 predictions_test = torch.argmax(z2_test, dim=1)
 
 final_accuracy = torch.mean(torch.tensor(predictions_test == y_test, dtype=torch.float32)).item() * 100
 
-print("final accuracy on test set: ", final_accuracy , "%")
-print("final loss on test set: ", loss_fn(z2_test, y_test).item())
+print("final accuracy on test set manually calculated: ", final_accuracy , "%")
+print("final loss on test set manually calculated: ", loss_fn(z2_test, y_test).item())
+print("final loss on train set manually calculated: ", loss_fn(z2, y_train).item())
 
+plt.plot(losses)
+plt.yscale('log')
+plt.show()
