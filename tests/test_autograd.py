@@ -1,21 +1,21 @@
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.datasets import load_breast_cancer
-from src.main import  forward_pass, load_and_split_breast_cancer_, data_standardization
+import src.main as model
+model.forward_pass, model.load_and_split_breast_cancer_, model.data_standardization,model.w1, model.b1, model.w2, model.b2
 
 
 def test_manual_gradient_to_autograd_():
     torch.manual_seed(42)
 
-    x_train, x_test, y_train, y_test = load_and_split_breast_cancer_()  
-    feature_scale, x_test_scaled = data_standardization(x_train, x_test)    
-    z1, a1, z2, w1, b1, w2, b2 = forward_pass()
+    x_train, x_test, y_train, y_test = model.load_and_split_breast_cancer_()  
+    feature_scale, x_test_scaled = model.data_standardization(x_train, x_test)    
+    z1, a1, z2 = model.forward_pass()
 
-    w1 = w1.clone().detach().requires_grad_(True)
-    b1 = b1.clone().detach().requires_grad_(True)
-    w2 = w2.clone().detach().requires_grad_(True)
-    b2 = b2.clone().detach().requires_grad_(True)
+    w1 = model.w1.clone().detach().requires_grad_(True)
+    b1 = model.b1.clone().detach().requires_grad_(True)
+    w2 = model.w2.clone().detach().requires_grad_(True)
+    b2 = model.b2.clone().detach().requires_grad_(True)
     feature_scale = torch.tensor(feature_scale,dtype=torch.float32)
 
     z1 = torch.matmul(feature_scale, w1) + b1
