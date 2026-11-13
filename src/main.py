@@ -3,8 +3,31 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.datasets import load_breast_cancer
 from sklearn.model_selection import train_test_split
+import os
+from sklearn.metrics import confusion_matrix
 
 torch.manual_seed(42)
+
+if os.path.exists('best_model.pth'):
+    checkpoint = torch.load('best_model.pth')
+    epoch = checkpoint['epoch']
+    best_loss = checkpoint['loss']
+    w1 = checkpoint['model_state_dict']['w1']
+    b1 = checkpoint['model_state_dict']['b1']
+    w2 = checkpoint['model_state_dict']['w2']
+    b2 = checkpoint['model_state_dict']['b2']
+    best_epoch = checkpoint['epoch']
+    start_epoch = epoch + 1
+    print("resume training from last epoch,",start_epoch, "with best loss:", best_loss)
+else:
+    start_epoch = 0
+    w1 = torch.randn(30,16)
+    b1 = torch.zeros(16,)
+    w2 = torch.randn(16,2)
+    b2 = torch.zeros(2,)
+    best_loss = float('inf')
+    print("start training from scratch")
+
 
 
 
@@ -46,18 +69,15 @@ def data_standardization(x_train, x_test):
     return feature_scale, x_test_scaled
 feature_scale, x_test_scaled = data_standardization(x_train, x_test)
 
-def forward_pass():
-    w1 = torch.randn(30,16, ) 
-    b1 = torch.zeros(16, )   
-    z1 = torch.matmul(x_train, w1) + b1
+
+def forward_pass(): 
+    z1 = torch.matmul(feature_scale, w1) + b1
     a1 = torch.relu(z1)
-    b2 = torch.zeros(2)
-    w2 = torch.randn(16,2)
     z2 = torch.matmul(a1, w2) + b2
 
-    return z1, a1, z2, w1, b1, w2, b2
+    return z1, a1, z2, 
 
-z1, a1, z2, w1, b1, w2, b2 = forward_pass()
+z1, a1, z2,= forward_pass()
 
 print("gradient Z = ", z1.grad_fn)
 print("z1 max: ", z1.abs().max().item())
@@ -66,13 +86,12 @@ print("z2 max: ", z2.abs().max().item())
 def prediction_accuracy():
     predictions = torch.argmax(z2, dim=1)
     accuracy = torch.sum(predictions == y_train).item() / len(y_train)
-    print(f"Accuracy: {accuracy:.4f}")
+    print(f"Training Accuracy: {accuracy:.4f}")
     return accuracy
 accuracy = prediction_accuracy()
 
 def loss_function():
-    _, _, z2, _, _, _, _ = forward_pass()
-    _,_,y_train, _ = load_and_split_breast_cancer_()
+    _, _, z2 = forward_pass()
     loss_fn = torch.nn.CrossEntropyLoss()
     loss = loss_fn(z2, y_train) 
     print(f"Loss: {loss.item():.4f}")
@@ -84,7 +103,7 @@ def backward_pass():
     da1 = torch.matmul(dz2, w2.T)
     relu = torch.where(z1 > 0,1,0)
     dz1 = da1 * relu
-    dw1 = torch.matmul(x_train.T, dz1)
+    dw1 = torch.matmul(feature_scale.T, dz1)
     db1 = dz1.sum(dim=0)
     dw2 = torch.matmul(a1.T, dz2)
     db2 = dz2.sum(dim=0)
@@ -106,20 +125,31 @@ def parameter_updates():
 new_w1, new_b1, new_w2, new_b2, learning_rate = parameter_updates()
 
 def train_model():
+    global best_loss
     losses = []
-    x_train, x_test, y_train, _ = load_and_split_breast_cancer_()
-    feature_scale, _ = data_standardization(x_train, x_test)
-    z1, a1, z2, _, _, _, _ = forward_pass()
+    train_losses = []
+    train_accuracies = []
+    test_accuracies = []
+    epochs_list = []
+    global best_epoch
+    x_train, x_test, y_train, y_test = load_and_split_breast_cancer_()
+    feature_scale, x_test_scaled = data_standardization(x_train, x_test)
+    z1, a1, z2, = forward_pass()
     loss, loss_fn = loss_function()
     new_w1, new_b1, new_w2, new_b2, learning_rate = parameter_updates()
     dz2, da1, relu, dz1, dw1, db1, dw2, db2 = backward_pass()
-    for epoch in range(200):
+
+    for epoch in range(start_epoch, start_epoch + 200):
         learning_rate = 0.01
         z1 = torch.matmul(feature_scale, new_w1) + new_b1
         a1 = torch.relu(z1)
         z2 = torch.matmul(a1, new_w2) + new_b2
-
         loss = loss_fn(z2, y_train) 
+        train_losses.append(loss.item())
+        predictions = torch.argmax(z2, dim=1)
+        train_accuracy = (predictions == y_train).float().mean().item() * 100
+        train_accuracies.append(train_accuracy)
+        epochs_list.append(epoch + 1)
         losses.append(loss.item())
 
         dz2 = (torch.softmax(z2, dim=1) - torch.nn.functional.one_hot(y_train, num_classes=2) ) / y_train.shape[0]
@@ -131,54 +161,103 @@ def train_model():
         dw2 = torch.matmul(a1.T, dz2)
         db2 = dz2.sum(dim=0)
 
+        z1_test = torch.matmul(x_test_scaled, new_w1) + new_b1
+        a1_test = torch.relu(z1_test)
+        z2_test = torch.matmul(a1_test, new_w2) + new_b2
+
+        predictions_test = torch.argmax(z2_test, dim=1)
+
+        test_accuracy = (predictions_test == y_test).float().mean().item() * 100
+
+        test_accuracies.append(test_accuracy)
+
+        current_loss = loss.item()
+        checkpoint = {
+            'epoch': epoch,
+            'loss': current_loss,
+            'model_state_dict': {
+                'w1': new_w1,
+                'b1': new_b1,
+                'w2': new_w2,
+                'b2': new_b2
+            }
+        }
+
+        if current_loss < best_loss:
+            best_loss = current_loss
+            best_epoch = epoch
+            torch.save(checkpoint, 'best_model.pth')
+
         new_w1 = new_w1 - learning_rate * dw1
         new_b1 = new_b1 - learning_rate * db1
         new_w2 = new_w2 - learning_rate * dw2
         new_b2 = new_b2 - learning_rate * db2
+        
         min_loss = min(losses)
-        best_epoch = losses.index(min_loss)
+
 
         if epoch < 10 or epoch % 20 == 0:
             print(f"Epoch {epoch+1}, Loss: {loss.item():.4f}")
 
     if epoch == best_epoch:
         print(f"Best epoch: {best_epoch}, Loss: {loss.item():.4f}")
+        print("Checkpoint saved: Best model updated.")
             
 
+    plt.figure(figsize=(15, 5))
 
-    return new_w1, new_b1, new_w2, new_b2, min_loss, best_epoch
+    plt.subplot(1, 3, 1)
+    plt.plot(epochs_list, train_losses)
+    plt.title("Training Loss")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
 
+    plt.subplot(1, 3, 2)
+    plt.plot(epochs_list, train_accuracies)
+    plt.title("Training Accuracy")
+    plt.xlabel("Epoch")
+    plt.ylabel("Accuracy (%)")
 
-new_w1, new_b1, new_w2, new_b2, min_loss, best_epoch = train_model()
+    plt.subplot(1, 3, 3)
+    plt.plot(epochs_list, test_accuracies)
+    plt.title("Test Accuracy")
+    plt.xlabel("Epoch")
+    plt.ylabel("Accuracy (%)")
+
+    plt.tight_layout()
+    plt.show()
+
+    return new_w1, new_b1, new_w2, new_b2, min_loss, best_epoch,checkpoint
+
 
 
 def evaluate_model():
-    z1_test = torch.matmul(x_test_scaled, new_w1) + new_b1
+    checkpoint = torch.load('best_model.pth')
+
+    w1 = checkpoint['model_state_dict']['w1']
+    b1 = checkpoint['model_state_dict']['b1']
+    w2 = checkpoint['model_state_dict']['w2']
+    b2 = checkpoint['model_state_dict']['b2']
+    z1_test = torch.matmul(x_test_scaled, w1) + b1
     a1_test = torch.relu(z1_test)
-    z2_test = torch.matmul(a1_test, new_w2) + new_b2
-    z1_train = torch.matmul(feature_scale, new_w1) + new_b1
+    z2_test = torch.matmul(a1_test, w2) + b2
+    z1_train = torch.matmul(feature_scale, w1) + b1
     a1_train = torch.relu(z1_train)
-    z2_train = torch.matmul(a1_train, new_w2) + new_b2
+    z2_train = torch.matmul(a1_train, w2) + b2
 
     predictions_test = torch.argmax(z2_test, dim=1)
-    final_accuracy = torch.mean(torch.tensor(predictions_test == y_test, dtype=torch.float32)).item() * 100
-    print("final accuracy on test set manually calculated: ", final_accuracy , "%")
-    print("final loss on test set manually calculated: ", loss_fn(z2_test, y_test).item())
-    print("final loss on train set manually calculated: ", loss_fn(z2_train, y_train).item())
+    final_accuracy = (predictions_test == y_test).float().mean().item() * 100
+    print(f"final accuracy on test set manually calculated: {final_accuracy:.4f}%")
+    print(f"final loss on test set manually calculated: {loss_fn(z2_test, y_test).item():.4f}")
+    print(f"final loss on train set manually calculated: {loss_fn(z2_train, y_train).item():.4f}")
+
 
 
 
 
 def main():
-    load_and_split_breast_cancer_()
-    data_standardization(x_train, x_test)
-    forward_pass()
-    prediction_accuracy()
-    loss_function()
-    backward_pass()
-    parameter_updates()
+    train_model()
     evaluate_model()
-
 
 
 if __name__ == "__main__":
