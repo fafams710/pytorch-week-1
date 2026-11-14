@@ -38,10 +38,10 @@ def test_manual_gradient_to_autograd_():
     dw2_manual_comp = torch.matmul(a1.T, dz2)
     db2_manual_comp = dz2.sum(dim=0)
 
-    torch.allclose(dw1_manual_comp, w1.grad, atol=1e-6)
-    torch.allclose(db1_manual_comp, b1.grad, atol=1e-6)
-    torch.allclose(dw2_manual_comp, w2.grad, atol=1e-6)
-    torch.allclose(db2_manual_comp, b2.grad, atol=1e-6)
+    assert torch.allclose(dw1_manual_comp, w1.grad, atol=1e-6)
+    assert torch.allclose(db1_manual_comp, b1.grad, atol=1e-6)
+    assert torch.allclose(dw2_manual_comp, w2.grad, atol=1e-6)
+    assert torch.allclose(db2_manual_comp, b2.grad, atol=1e-6)
 
 
 
