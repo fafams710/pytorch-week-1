@@ -359,3 +359,5 @@ if __name__ == "__main__":
         print(f"Final test loss: {loss_fn(torch.matmul(torch.relu(torch.matmul(x_test_scaled, new_w1) + new_b1), new_w2) + new_b2, y_test).item():.4f}")
         print(f"Final train loss: {loss_fn(torch.matmul(torch.relu(torch.matmul(feature_scale, new_w1) + new_b1), new_w2) + new_b2, y_train).item():.4f}")
         print(f"Best epoch: {best_epoch}")
+
+#this is the for the checking that will be used as a pull request
