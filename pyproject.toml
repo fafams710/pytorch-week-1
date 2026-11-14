@@ -11,5 +11,5 @@ evaluate = ["-m", "src.main", "--evaluate", "--checkpoint", "{checkpoint}", "--m
 split = ["-m", "src.main", "--split", "--out", "{split_out}"]
 checkpoint_url = "https://github.com/fafams710/pytorch-week-1/releases/download/1.0.0/best_model.pth"
 metric_name = "test_accuracy"
-metric_value = 94.73684 
+metric_value = 0.9473684 
 tolerance = 0.0002  
