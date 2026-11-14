@@ -1,0 +1,15 @@
+[project]
+name = "qin-pytorch-week-01"
+version = "0.1.0"
+description = "A neural network from first principles"
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.reproduce]
+train_smoke = ["-m", "src.main", "--train", "--smoke", "--checkpoint", "runs/smoke.pt"]
+evaluate = ["-m", "src.main", "--evaluate", "--checkpoint", "{checkpoint}", "--metrics-out", "{metrics_out}"]
+split = ["-m", "src.main", "--split", "--out", "{split_out}"]
+checkpoint_url = "https://github.com/fafams710/pytorch-week-1/releases/download/1.0.0/best_model.pth"
+metric_name = "test_accuracy"
+metric_value = 0.9473684 
+tolerance = 0.0002  
