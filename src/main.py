@@ -8,7 +8,7 @@ from sklearn.metrics import confusion_matrix
 
 torch.manual_seed(42)
 
-if os.path.exists('best_model.pth'):
+if False and os.path.exists('best_model.pth'):
     checkpoint = torch.load('best_model.pth')
     epoch = checkpoint['epoch']
     best_loss = checkpoint['loss']
@@ -197,10 +197,10 @@ def train_model():
 
 
         if epoch < 10 or epoch % 20 == 0:
-            print(f"Epoch {epoch+1}, Loss: {loss.item():.4f}")
+            print(f"Epoch {epoch+1}, Loss: {loss.item():.6f}")
 
     if epoch == best_epoch:
-        print(f"Best epoch: {best_epoch}, Loss: {loss.item():.4f}")
+        print(f"Best epoch: {best_epoch}, Loss: {loss.item():.6f}")
         print("Checkpoint saved: Best model updated.")
             
 
@@ -231,33 +231,34 @@ def train_model():
 
 
 
-def evaluate_model():
+
+def evaluate_model(new_w1, new_b1, new_w2, new_b2):
     checkpoint = torch.load('best_model.pth')
 
     w1 = checkpoint['model_state_dict']['w1']
     b1 = checkpoint['model_state_dict']['b1']
     w2 = checkpoint['model_state_dict']['w2']
     b2 = checkpoint['model_state_dict']['b2']
-    z1_test = torch.matmul(x_test_scaled, w1) + b1
+    z1_test = torch.matmul(x_test_scaled, new_w1) + new_b1
     a1_test = torch.relu(z1_test)
-    z2_test = torch.matmul(a1_test, w2) + b2
-    z1_train = torch.matmul(feature_scale, w1) + b1
+    z2_test = torch.matmul(a1_test, new_w2) + new_b2
+    z1_train = torch.matmul(feature_scale, new_w1) + new_b1
     a1_train = torch.relu(z1_train)
-    z2_train = torch.matmul(a1_train, w2) + b2
+    z2_train = torch.matmul(a1_train, new_w2) + new_b2
 
     predictions_test = torch.argmax(z2_test, dim=1)
     final_accuracy = (predictions_test == y_test).float().mean().item() * 100
-    print(f"final accuracy on test set manually calculated: {final_accuracy:.4f}%")
-    print(f"final loss on test set manually calculated: {loss_fn(z2_test, y_test).item():.4f}")
-    print(f"final loss on train set manually calculated: {loss_fn(z2_train, y_train).item():.4f}")
+    print(f"final accuracy on test set manually calculated: {final_accuracy:.6f}%")
+    print(f"final loss on test set manually calculated: {loss_fn(z2_test, y_test).item():.6f}")
+    print(f"final loss on train set manually calculated: {loss_fn(z2_train, y_train).item():.6f}")
 
 
 
 
 
 def main():
-    train_model()
-    evaluate_model()
+    new_w1, new_b1, new_w2, new_b2, _, _, _ = train_model()
+    evaluate_model(new_w1, new_b1, new_w2, new_b2)
 
 
 if __name__ == "__main__":

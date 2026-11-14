@@ -5,11 +5,11 @@ import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.datasets import load_breast_cancer
 import torch.nn.functional as F
-
+from .main import w1, w2, b1, b2
 torch.manual_seed(42)
 
 class BreastCancerClassifier(nn.Module):
-    def __init__(self):
+    def __init__(self,):
         super(BreastCancerClassifier, self).__init__()
         self.w1 = nn.Linear(30,16)
         self.w2 = nn.Linear(16,2)
@@ -37,10 +37,10 @@ class BreastCancerClassifier(nn.Module):
             self.optimizer.step()
 
             if epoch < 10 or epoch % 20 == 0:
-                print(f"Epoch {epoch+1}, Loss: {loss.item():.4f}")
+                print(f"Epoch {epoch+1}, Loss: {loss.item():.6f}")
 
         if epoch == best_epoch:
-            print(f"Best epoch: {best_epoch}, Loss: {loss.item():.4f}")
+            print(f"Best epoch: {best_epoch}, Loss: {loss.item():.6f}")
 
         return losses,best_epoch
 
@@ -80,14 +80,22 @@ def data_standardization(x_train, x_test):
     return feature_scale, x_test_scaled
 feature_scale, x_test_scaled = data_standardization(x_train, x_test)
 
+with torch.no_grad():
+    model.w1.weight.copy_(w1.T)
+    model.w2.weight.copy_(w2.T)
+    model.w1.bias.copy_(b1)
+    model.w2.bias.copy_(b2)
+
+
 model.fit(feature_scale,y_train)
 
-with torch.no_grad():
-    predictions = model(x_test_scaled)
 
+
+predictions = model(x_test_scaled)
 predictions = torch.argmax(predictions, dim=1)
 correct_predictions = torch.sum(predictions == y_test).item()
 accuracy = correct_predictions / len(y_test)
-print(f"Accuracy: {accuracy * 100 :.4f}% ")
-print(f"final loss on test data: {model.loss_function(model(x_test_scaled), y_test).item():.4f}")
-print(f"final loss on train data: {model.loss_function(model(feature_scale), y_train).item():.4f}")
+print(f"Accuracy: {accuracy * 100 :.6f}% ")
+print(f"final loss on test data: {model.loss_function(model(x_test_scaled), y_test).item():.6f}")
+print(f"final loss on train data: {model.loss_function(model(feature_scale), y_train).item():.6f}")
+
