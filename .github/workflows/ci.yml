@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install from pinned requirements (CPU PyTorch)
+        run: |
+          python -m pip install --upgrade pip
+          pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
+
+      - name: Run tests
+        run: python -m pytest -v
+
+      # Runs the contract checks once [tool.reproduce] exists in pyproject.toml.
+      # Until then it prints a warning and skips. Remove the skip before you submit.
+      - name: Reproduce (split, smoke train, released checkpoint, metric check)
+        run: |
+          mkdir -p runs
+          python - <<'PYEOF'
+          import json
+          import pathlib
+          import subprocess
+          import sys
+          import tomllib
+          import urllib.request
+
+          cfg = tomllib.loads(pathlib.Path("pyproject.toml").read_text()).get("tool", {}).get("reproduce")
+          if cfg is None:
+              print("::warning::[tool.reproduce] is missing from pyproject.toml, so the reproduce checks were skipped")
+              sys.exit(0)
+
+
+          def run(args, **subs):
+              args = [subs[a[1:-1]] if a.startswith("{") and a.endswith("}") else a for a in args]
+              print("RUN:", sys.executable, *args, flush=True)
+              subprocess.run([sys.executable, *args], check=True)
+
+
+          run(cfg["split"], split_out="split_a.json")
+          run(cfg["split"], split_out="split_b.json")
+          a = json.loads(pathlib.Path("split_a.json").read_text())
+          b = json.loads(pathlib.Path("split_b.json").read_text())
+          assert a == b, "split is not reproducible"
+          assert not set(a["train"]) & set(a["test"]), "train and test share rows"
+
+          run(cfg["train_smoke"])
+
+          urllib.request.urlretrieve(cfg["checkpoint_url"], "checkpoint.pt")
+          run(cfg["evaluate"], checkpoint="checkpoint.pt", metrics_out="metrics.json")
+
+          metrics = json.loads(pathlib.Path("metrics.json").read_text())
+          measured = metrics[cfg["metric_name"]]
+          claimed = cfg["metric_value"]
+          tol = cfg["tolerance"]
+          print(f"measured={measured} claimed={claimed} tolerance={tol}")
+          if abs(measured - claimed) > tol:
+              sys.exit(f"FAIL: {cfg['metric_name']} differs by more than {tol}")
+          print("OK")
+          PYEOF
