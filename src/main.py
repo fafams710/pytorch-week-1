@@ -1,3 +1,5 @@
+import argparse
+
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
@@ -227,7 +229,7 @@ def train_model():
     plt.tight_layout()
     plt.show()
 
-    return new_w1, new_b1, new_w2, new_b2, min_loss, best_epoch,checkpoint
+    return new_w1, new_b1, new_w2, new_b2, min_loss, best_epoch,checkpoint,
 
 
 
@@ -260,6 +262,100 @@ def main():
     new_w1, new_b1, new_w2, new_b2, _, _, _ = train_model()
     evaluate_model(new_w1, new_b1, new_w2, new_b2)
 
+def evaluate_checkpoint(checkpoint, x_test, y_test):
+    weights = checkpoint["model_state_dict"]
+    w1, b1, w2, b2 = weights["w1"], weights["b1"], weights["w2"], weights["b2"]
+
+    if "mean" in checkpoint:
+        mean, std = checkpoint["mean"], checkpoint["std"]
+    else:
+        x_tr, _, _, _ = load_and_split_breast_cancer_()
+        mean, std = x_tr.mean(dim=0), x_tr.std(dim=0)
+    x_test_scaled = (x_test - mean) / (std + 1e-8)
+
+    with torch.no_grad():
+        z1 = torch.matmul(x_test_scaled, w1) + b1
+        a1 = torch.relu(z1)
+        z2 = torch.matmul(a1, w2) + b2
+
+    predictions = torch.argmax(z2, dim=1)
+    return (predictions == y_test).float().mean().item()
 
 if __name__ == "__main__":
-    main()
+
+    import argparse, json
+    from pathlib import Path
+
+    parser = argparse.ArgumentParser(
+        description="Breast Cancer Neural Network Classifier"
+    )
+
+    group = parser.add_mutually_exclusive_group(required=True)
+
+    group.add_argument("--split", action="store_true")
+    group.add_argument("--train", action="store_true")
+    group.add_argument("--evaluate", action="store_true")
+
+    parser.add_argument("--smoke", action="store_true")
+
+    parser.add_argument("--out", type=str, default="data/split_indices.json")
+    parser.add_argument("--checkpoint", type=str, default="best_model.pth")
+    parser.add_argument("--metrics-out", type=str, default="metrics.json")
+
+    args = parser.parse_args()
+
+    x_train, x_test, y_train, y_test = load_and_split_breast_cancer_()
+
+    if args.split:
+        _, y_all = load_breast_cancer_()
+        indices = np.arange(len(y_all))
+        train_idx, test_idx = train_test_split(indices, test_size=0.2, random_state=42)
+
+        out_path = Path(args.out)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps({
+            "train": train_idx.tolist(),
+            "test": test_idx.tolist(),
+        }, indent=2))
+
+    elif args.train:
+        learning_rate = 0.01
+        epochs = 200
+        if args.smoke:
+            epochs = 10
+        else:
+            epochs = 200
+
+        new_w1, new_b1, new_w2, new_b2, min_loss, best_epoch, checkpoint = train_model()
+        
+
+        out_path = Path(args.checkpoint)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(checkpoint, out_path)
+
+    elif args.evaluate:
+
+        saved_checkpoint = torch.load(
+            args.checkpoint,
+            map_location=torch.device("cpu"),
+            weights_only=True
+        )
+
+        acc = evaluate_checkpoint(saved_checkpoint, x_test, y_test)
+
+        out_path = Path(args.metrics_out)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+
+        out_path.write_text(json.dumps({
+            "test_accuracy": acc
+        }, indent=2))
+
+    else:
+        x_train, x_test, y_train, y_test = load_and_split_breast_cancer_()
+        new_w1, new_b1, new_w2, new_b2, min_loss, best_epoch, checkpoint, learning_rate = train_model(x_train, y_train, learning_rate=0.01, epochs=200, verbose=True)
+        test_acc = evaluate_model(checkpoint, x_test, y_test)
+
+        print(f"Final test accuracy: {test_acc:.4f}")
+        print(f"Final test loss: {loss_fn(torch.matmul(torch.relu(torch.matmul(x_test_scaled, new_w1) + new_b1), new_w2) + new_b2, y_test).item():.4f}")
+        print(f"Final train loss: {loss_fn(torch.matmul(torch.relu(torch.matmul(feature_scale, new_w1) + new_b1), new_w2) + new_b2, y_train).item():.4f}")
+        print(f"Best epoch: {best_epoch}")
